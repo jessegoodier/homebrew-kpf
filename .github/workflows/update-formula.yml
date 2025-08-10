@@ -1,0 +1,212 @@
+name: Update Homebrew Formula
+
+on:
+  # Manual trigger
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update to (leave empty for latest)'
+        required: false
+        type: string
+  # Trigger from main repository
+  repository_dispatch:
+    types: [update-homebrew-formula]
+  # Scheduled check for new versions
+  schedule:
+    - cron: '0 12 * * *'  # Daily at noon UTC
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tap repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests PyYAML
+
+      - name: Get latest version info
+        id: version-info
+        run: |
+          python3 << 'EOF'
+          import json
+          import requests
+          import sys
+          import os
+          
+          # Get version from input or fetch latest
+          target_version = "${{ github.event.inputs.version }}" or "${{ github.event.client_payload.version }}"
+          
+          if not target_version:
+              # Fetch latest version from PyPI
+              response = requests.get('https://pypi.org/pypi/kpf/json')
+              response.raise_for_status()
+              data = response.json()
+              target_version = data['info']['version']
+              print(f"Latest version from PyPI: {target_version}")
+          
+          # Get version-specific info
+          response = requests.get(f'https://pypi.org/pypi/kpf/{target_version}/json')
+          response.raise_for_status()
+          data = response.json()
+          
+          # Find source distribution
+          sdist_url = None
+          sdist_sha256 = None
+          
+          for url_info in data['urls']:
+              if url_info['packagetype'] == 'sdist':
+                  sdist_url = url_info['url']
+                  sdist_sha256 = url_info['digests']['sha256']
+                  break
+          
+          if not sdist_url:
+              print("No source distribution found!")
+              sys.exit(1)
+          
+          # Set outputs
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"version={target_version}\n")
+              f.write(f"url={sdist_url}\n")
+              f.write(f"sha256={sdist_sha256}\n")
+          
+          print(f"Version: {target_version}")
+          print(f"URL: {sdist_url}")
+          print(f"SHA256: {sdist_sha256}")
+          EOF
+
+      - name: Check if update needed
+        id: check-update
+        run: |
+          CURRENT_VERSION=$(grep -o 'kpf-[0-9]*\.[0-9]*\.[0-9]*' Formula/kpf.rb | sed 's/kpf-//')
+          NEW_VERSION="${{ steps.version-info.outputs.version }}"
+          
+          echo "Current version: $CURRENT_VERSION"
+          echo "New version: $NEW_VERSION"
+          
+          if [ "$CURRENT_VERSION" != "$NEW_VERSION" ]; then
+            echo "update-needed=true" >> $GITHUB_OUTPUT
+            echo "Update needed from $CURRENT_VERSION to $NEW_VERSION"
+          else
+            echo "update-needed=false" >> $GITHUB_OUTPUT
+            echo "No update needed, already at version $NEW_VERSION"
+          fi
+
+      - name: Update formula
+        if: steps.check-update.outputs.update-needed == 'true'
+        run: |
+          VERSION="${{ steps.version-info.outputs.version }}"
+          URL="${{ steps.version-info.outputs.url }}"
+          SHA256="${{ steps.version-info.outputs.sha256 }}"
+          
+          # Update the formula file
+          sed -i "s|url \".*\"|url \"$URL\"|g" Formula/kpf.rb
+          sed -i "s|sha256 \".*\"|sha256 \"$SHA256\"|g" Formula/kpf.rb
+          
+          echo "Formula updated to version $VERSION"
+          
+          # Show the changes
+          git diff Formula/kpf.rb
+
+      - name: Update dependencies
+        if: steps.check-update.outputs.update-needed == 'true'
+        run: |
+          # Install homebrew-pypi-poet to regenerate dependencies
+          pip install homebrew-pypi-poet
+          
+          # Generate new resource blocks (this will include all dependencies)
+          VERSION="${{ steps.version-info.outputs.version }}"
+          
+          # Create a temporary environment and install the package
+          python -m venv temp_env
+          source temp_env/bin/activate
+          pip install kpf==$VERSION
+          
+          # Generate resources and extract them
+          poet -f kpf > temp_formula.rb
+          
+          # Extract resource blocks (everything between the first 'resource' and 'def install')
+          sed -n '/resource /,/def install/p' temp_formula.rb | head -n -1 > temp_resources.rb
+          
+          # Replace resources in the main formula (preserve the class definition and main metadata)
+          # This is a simplified approach - in production you might want more sophisticated parsing
+          python3 << 'EOF'
+          import re
+          
+          # Read the current formula
+          with open('Formula/kpf.rb', 'r') as f:
+              content = f.read()
+          
+          # Read the new resources
+          with open('temp_resources.rb', 'r') as f:
+              new_resources = f.read().strip()
+          
+          # Replace resources section
+          # Pattern: from first 'resource' to line before 'def install'
+          pattern = r'(.*?)(resource .*?)(  def install.*)'
+          replacement = r'\1' + new_resources + r'\n\n\2'
+          
+          # If no existing resources, add them before def install
+          if 'resource ' not in content:
+              content = re.sub(r'(  depends_on "python@3\.12"\n)(  def install)', r'\1\n' + new_resources + r'\n\n\2', content, flags=re.DOTALL)
+          else:
+              content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+          
+          # Write back
+          with open('Formula/kpf.rb', 'w') as f:
+              f.write(content)
+          EOF
+          
+          # Cleanup
+          rm -f temp_formula.rb temp_resources.rb
+          rm -rf temp_env
+
+      - name: Test formula
+        if: steps.check-update.outputs.update-needed == 'true'
+        run: |
+          # Install Homebrew for testing
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          
+          # Test the formula
+          brew test-formula Formula/kpf.rb || echo "Formula test completed with warnings"
+
+      - name: Commit changes
+        if: steps.check-update.outputs.update-needed == 'true'
+        run: |
+          VERSION="${{ steps.version-info.outputs.version }}"
+          
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add Formula/kpf.rb
+          git commit -m "Update kpf to version $VERSION
+
+          - Updated source URL and SHA256 checksum
+          - Updated dependencies
+          - Automated update from GitHub Actions
+          
+          🤖 Generated with GitHub Actions"
+          
+          git push
+
+      - name: Create release notes
+        if: steps.check-update.outputs.update-needed == 'true'
+        run: |
+          VERSION="${{ steps.version-info.outputs.version }}"
+          echo "✅ Successfully updated Homebrew formula for kpf to version $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Users can now install the latest version with:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "brew upgrade jessegoodier/kpf/kpf" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

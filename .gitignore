@@ -1,0 +1,15 @@
+# Temporary files from formula generation
+temp_*.rb
+temp_env/
+
+# macOS
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Homebrew testing artifacts
+*.bottle.*
