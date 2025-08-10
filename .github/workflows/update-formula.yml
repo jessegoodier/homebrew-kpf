@@ -117,58 +117,12 @@ jobs:
           # Show the changes
           git diff Formula/kpf.rb
 
-      - name: Update dependencies
+      - name: Update formula - no dependency resources needed
         if: steps.check-update.outputs.update-needed == 'true'
         run: |
-          # Install homebrew-pypi-poet to regenerate dependencies
-          pip install homebrew-pypi-poet
-          
-          # Generate new resource blocks (this will include all dependencies)
-          VERSION="${{ steps.version-info.outputs.version }}"
-          
-          # Create a temporary environment and install the package
-          python -m venv temp_env
-          source temp_env/bin/activate
-          pip install kpf==$VERSION
-          
-          # Generate resources and extract them
-          poet -f kpf > temp_formula.rb
-          
-          # Extract resource blocks (everything between the first 'resource' and 'def install')
-          sed -n '/resource /,/def install/p' temp_formula.rb | head -n -1 > temp_resources.rb
-          
-          # Replace resources in the main formula (preserve the class definition and main metadata)
-          # This is a simplified approach - in production you might want more sophisticated parsing
-          python3 << 'EOF'
-          import re
-          
-          # Read the current formula
-          with open('Formula/kpf.rb', 'r') as f:
-              content = f.read()
-          
-          # Read the new resources
-          with open('temp_resources.rb', 'r') as f:
-              new_resources = f.read().strip()
-          
-          # Replace resources section
-          # Pattern: from first 'resource' to line before 'def install'
-          pattern = r'(.*?)(resource .*?)(  def install.*)'
-          replacement = r'\1' + new_resources + r'\n\n\2'
-          
-          # If no existing resources, add them before def install
-          if 'resource ' not in content:
-              content = re.sub(r'(  depends_on "python@3\.12"\n)(  def install)', r'\1\n' + new_resources + r'\n\n\2', content, flags=re.DOTALL)
-          else:
-              content = re.sub(pattern, replacement, content, flags=re.DOTALL)
-          
-          # Write back
-          with open('Formula/kpf.rb', 'w') as f:
-              f.write(content)
-          EOF
-          
-          # Cleanup
-          rm -f temp_formula.rb temp_resources.rb
-          rm -rf temp_env
+          # No dependency update needed since we use direct PyPI installation
+          # Formula automatically uses the correct dependencies from PyPI
+          echo "Formula uses direct PyPI installation - no resource blocks needed"
 
       - name: Test formula
         if: steps.check-update.outputs.update-needed == 'true'

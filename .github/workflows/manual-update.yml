@@ -29,40 +29,7 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           
-          # Create temporary environment
-          python -m venv temp_env
-          source temp_env/bin/activate
-          
-          # Install the specific version
-          pip install kpf==$VERSION
-          
-          # Generate formula
-          poet -f kpf > temp_kpf.rb
-          
-          echo "Generated formula for kpf $VERSION:"
-          cat temp_kpf.rb
-
-      - name: Update formula with metadata
-        run: |
-          VERSION="${{ github.event.inputs.version }}"
-          
-          # Create the final formula with proper metadata
-          cat > Formula/kpf.rb << 'EOF'
-          class Kpf < Formula
-            include Language::Python::Virtualenv
-
-            desc "A terminal utility to run kubectl port-forward and automatically restart it when endpoint changes are detected"
-            homepage "https://github.com/jessegoodier/kpf"
-            license "MIT"
-
-            depends_on "python@3.12"
-
-          EOF
-          
-          # Extract URL, SHA256, and resources from generated formula
-          source temp_env/bin/activate
-          
-          # Get package info
+          # Get package info from PyPI
           python3 << 'PYTHON_EOF'
           import json
           import requests
@@ -74,37 +41,31 @@ jobs:
           # Find source distribution
           for url_info in data['urls']:
               if url_info['packagetype'] == 'sdist':
-                  print(f'  url "{url_info["url"]}"')
-                  print(f'  sha256 "{url_info["digests"]["sha256"]}"')
+                  url = url_info["url"]
+                  sha256 = url_info["digests"]["sha256"]
                   break
-          PYTHON_EOF
           
-          # Add URL and SHA256 to formula
-          python3 << 'PYTHON_EOF'
-          import json
-          import requests
-          
-          version = "${{ github.event.inputs.version }}"
-          response = requests.get(f'https://pypi.org/pypi/kpf/{version}/json')
-          data = response.json()
-          
-          # Find source distribution and append to formula
-          for url_info in data['urls']:
-              if url_info['packagetype'] == 'sdist':
-                  with open('Formula/kpf.rb', 'a') as f:
-                      f.write(f'  url "{url_info["url"]}"\n')
-                      f.write(f'  sha256 "{url_info["digests"]["sha256"]}"\n\n')
-                  break
-          PYTHON_EOF
-          
-          # Extract and add resources from poet-generated formula
-          grep -A 1000 "resource " temp_kpf.rb | grep -B 1000 "def install" | head -n -1 >> Formula/kpf.rb
-          
-          # Add the install and test methods
-          cat >> Formula/kpf.rb << 'EOF'
+          # Create the formula
+          formula_content = f'''class Kpf < Formula
+            include Language::Python::Virtualenv
+
+            desc "A terminal utility to run kubectl port-forward and automatically restart it when endpoint changes are detected"
+            homepage "https://github.com/jessegoodier/kpf"
+            url "{url}"
+            sha256 "{sha256}"
+            license "MIT"
+
+            depends_on "python@3.12"
 
             def install
-              virtualenv_install_with_resources
+              virtualenv_create(libexec, "python3.12")
+              
+              # Install kpf and its dependencies directly from PyPI using wheels
+              # This bypasses all the build system compatibility issues
+              system libexec/"bin/python", "-m", "pip", "install", "kpf=={version}"
+              
+              # Create binary symlink
+              bin.install_symlink libexec/"bin/kpf"
             end
 
             test do
@@ -115,16 +76,20 @@ jobs:
               version_output = shell_output("#{bin}/kpf --version")
               assert_match "kpf #{version}", version_output
             end
-          end
-          EOF
+          end'''
           
-          echo "Final formula:"
-          cat Formula/kpf.rb
+          # Write the formula
+          with open('Formula/kpf.rb', 'w') as f:
+              f.write(formula_content)
+          
+          print("Generated formula:")
+          print(formula_content)
+          PYTHON_EOF
 
-      - name: Cleanup
+      - name: Show final formula
         run: |
-          rm -f temp_kpf.rb
-          rm -rf temp_env
+          echo "Final formula content:"
+          cat Formula/kpf.rb
 
       - name: Test formula syntax
         run: |

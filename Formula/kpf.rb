@@ -13,7 +13,7 @@ class Kpf < Formula
     virtualenv_create(libexec, "python3.12")
     
     # Install kpf and its dependencies directly from PyPI using wheels
-    # This bypasses all the build system issues
+    # This bypasses all the build system compatibility issues
     system libexec/"bin/python", "-m", "pip", "install", "kpf==0.1.10"
     
     # Create binary symlink
