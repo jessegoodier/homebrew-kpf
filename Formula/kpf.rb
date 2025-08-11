@@ -1,10 +1,10 @@
 class Kpf < Formula
   include Language::Python::Virtualenv
 
-  desc "A terminal utility to run kubectl port-forward and automatically restart it when endpoint changes are detected"
+  desc "Kubernetes utility to improve kubectl port-forward reliability and usability"
   homepage "https://github.com/jessegoodier/kpf"
-  url "https://files.pythonhosted.org/packages/39/82/113d6817f59ced1a9302a1f7ea2e5d4d442591700f401979e51af3885547/kpf-0.1.10.tar.gz"
-  sha256 "bad1f4671d313f3c4ea4603ee44c18f426477f090bcd1de3138b23941300d37a"
+  url "https://files.pythonhosted.org/packages/20/8c/838c77ea4d0c22e94a45a33bfb1e984e5272c1a87702de328c878ca477a2/kpf-0.1.12.tar.gz"
+  sha256 "47078648f86460289e41c90bb729cb36b1aae875a518e535277e7c39eb78a3de"
   license "MIT"
 
   depends_on "python@3.12"
@@ -14,7 +14,7 @@ class Kpf < Formula
     
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
-    system libexec/"bin/python", "-m", "pip", "install", "kpf==0.1.10"
+    system libexec/"bin/python", "-m", "pip", "install", "kpf==0.1.12"
     
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
@@ -26,6 +26,6 @@ class Kpf < Formula
     
     # Test version output
     version_output = shell_output("#{bin}/kpf --version")
-    assert_match "kpf #{version}", version_output
+    assert_match "kpf 0.1.12", version_output
   end
 end
