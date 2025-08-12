@@ -37,6 +37,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
+      - name: Wait for PyPI availability
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          echo "Waiting 5 minutes for PyPI to process the new package..."
+          sleep 300
+
       - name: Get version information
         id: version-info
         run: |
