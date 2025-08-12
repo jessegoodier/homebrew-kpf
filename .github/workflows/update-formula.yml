@@ -47,11 +47,11 @@ jobs:
           if [[ -n "$INPUT_VERSION" ]]; then
             echo "Using manual input version: $INPUT_VERSION"
             python3 scripts/formula-updater.py --version "$INPUT_VERSION" --output-format env
-          elif [[ -n "$PAYLOAD_VERSION" ]]; then
+          elif [[ -n "$PAYLOAD_VERSION" && "$PAYLOAD_VERSION" != "refs/heads/main" && "$PAYLOAD_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
             echo "Using repository dispatch version: $PAYLOAD_VERSION"
             python3 scripts/formula-updater.py --version "$PAYLOAD_VERSION" --output-format env
           else
-            echo "Fetching latest version from PyPI"
+            echo "Fetching latest version from PyPI (payload version: $PAYLOAD_VERSION)"
             python3 scripts/formula-updater.py --fetch-version-from-pypi --output-format env
           fi
 
