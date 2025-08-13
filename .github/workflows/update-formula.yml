@@ -40,8 +40,46 @@ jobs:
       - name: Wait for PyPI availability
         if: github.event_name == 'repository_dispatch'
         run: |
-          echo "Waiting 5 minutes for PyPI to process the new package..."
-          sleep 300
+          echo "Checking if latest GitHub release matches PyPI version..."
+          
+          # Get the latest GitHub release version
+          GITHUB_LATEST=$(curl -s "https://api.github.com/repos/jessegoodier/kpf/releases/latest" | jq -r '.tag_name' | sed 's/^v//')
+          echo "Latest GitHub release: $GITHUB_LATEST"
+          
+          # Get the latest PyPI version
+          PYPI_LATEST=$(curl -s "https://pypi.org/pypi/kpf/json" | jq -r '.info.version')
+          echo "Latest PyPI version: $PYPI_LATEST"
+          
+          # Check if versions match, retry every 15 seconds for 5 minutes
+          MAX_ATTEMPTS=20
+          ATTEMPT=1
+          
+          while [[ $ATTEMPT -le $MAX_ATTEMPTS ]]; do
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS: Checking version match..."
+            
+            if [[ "$GITHUB_LATEST" == "$PYPI_LATEST" ]]; then
+              echo "✅ Versions match! GitHub: $GITHUB_LATEST, PyPI: $PYPI_LATEST"
+              break
+            else
+              echo "❌ Versions don't match. GitHub: $GITHUB_LATEST, PyPI: $PYPI_LATEST"
+              
+              if [[ $ATTEMPT -eq $MAX_ATTEMPTS ]]; then
+                echo "❌ Failed to match versions after $MAX_ATTEMPTS attempts (5 minutes)"
+                echo "GitHub version: $GITHUB_LATEST"
+                echo "PyPI version: $PYPI_LATEST"
+                exit 1
+              fi
+              
+              echo "Waiting 15 seconds before next attempt..."
+              sleep 15
+              
+              # Refresh versions for next attempt
+              GITHUB_LATEST=$(curl -s "https://api.github.com/repos/jessegoodier/kpf/releases/latest" | jq -r '.tag_name' | sed 's/^v//')
+              PYPI_LATEST=$(curl -s "https://pypi.org/pypi/kpf/json" | jq -r '.info.version')
+            fi
+            
+            ATTEMPT=$((ATTEMPT + 1))
+          done
 
       - name: Get version information
         id: version-info
