@@ -3,8 +3,8 @@ class Kpf < Formula
 
   desc "Kubernetes utility to improve kubectl port-forward reliability and usability"
   homepage "https://github.com/jessegoodier/kpf"
-  url "https://files.pythonhosted.org/packages/f8/37/97874fac5a0beb4a2f06bc2d07a7a6cc05f0c0e3b7b788699a7de50cccf6/kpf-0.2.0.tar.gz"
-  sha256 "4fe450d2f8bb6f58fd9f1d82047b1e9e7b7ad63f6ec059a3ef1a64cf21accdb7"
+  url "https://files.pythonhosted.org/packages/4d/49/ec93a68161bbd34d165377e71cb0f5a22b5c47ea5230f9168da1b20892c6/kpf-0.2.3.tar.gz"
+  sha256 "4e48078e9f2ea32a92afd6291760ec6b1f8c7d781251fc44db559670b37c80f5"
   license "MIT"
 
   depends_on "python@3.12"
@@ -14,7 +14,7 @@ class Kpf < Formula
     
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
-    system libexec/"bin/python", "-m", "pip", "install", "kpf==0.2.0"
+    system libexec/"bin/python", "-m", "pip", "install", "kpf==0.2.3"
     
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
@@ -26,6 +26,6 @@ class Kpf < Formula
     
     # Test version output
     version_output = shell_output("#{bin}/kpf --version")
-    assert_match "kpf 0.2.0", version_output
+    assert_match "kpf 0.2.3", version_output
   end
 end
