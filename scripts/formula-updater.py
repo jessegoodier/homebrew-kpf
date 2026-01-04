@@ -95,17 +95,21 @@ class FormulaUpdater:
   sha256 "{sha256}"
   license "MIT"
 
-  depends_on "python@3.12"
+  depends_on "python@3.14"
 
   def install
-    virtualenv_create(libexec, "python3.12")
+    virtualenv_create(libexec, "python3.14")
     
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
-    system libexec/"bin/python", "-m", "pip", "install", "kpf=={version}"
+    system libexec/"bin/python", "-m", "pip", "install", "--ignore-requires-python", "kpf=={version}"
     
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
+
+    # Install shell completions
+    # bash_completion.install tap.path/"completions/kpf.bash" => "kpf"
+    # zsh_completion.install tap.path/"completions/_kpf" => "_kpf"
   end
 
   test do

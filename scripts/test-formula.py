@@ -40,6 +40,7 @@ class FormulaTester:
         self.verbose = verbose
         self.dry_run = dry_run
         self.was_installed = False
+        self.test_tap_name = "jessegoodier/local-test-kpf"
 
     def print_status(self, message: str) -> None:
         """Print an informational message."""
@@ -58,7 +59,7 @@ class FormulaTester:
         print(f"{Colors.GREEN}[SUCCESS]{Colors.NC} {message}")
 
     def run_command(
-        self, command: list, capture_output: bool = False, check: bool = True
+        self, command: list, capture_output: bool = False, check: bool = True, shell: bool = False
     ) -> subprocess.CompletedProcess:
         """Run a shell command with proper error handling."""
         if self.dry_run:
@@ -68,9 +69,9 @@ class FormulaTester:
 
         try:
             if capture_output:
-                result = subprocess.run(command, capture_output=True, text=True, check=check)
+                result = subprocess.run(command, capture_output=True, text=True, check=check, shell=shell)
             else:
-                result = subprocess.run(command, check=check)
+                result = subprocess.run(command, check=check, shell=shell)
             return result
         except subprocess.CalledProcessError as e:
             if check:
@@ -151,13 +152,37 @@ class FormulaTester:
             self.print_warning(f"Error during uninstallation: {e}")
 
     def install_formula(self) -> None:
-        """Install the formula from the local formula file."""
-        self.print_status(f"{Colors.BLUE}Installing {self.formula_name} from local formula...")
+        """Install the formula from the local formula file using a temporary tap."""
+        self.print_status(f"{Colors.BLUE}Installing {self.formula_name} from local tap...")
 
+        # 1. Create temporary tap
+        self.print_status("Creating temporary tap...")
+        self.run_command(["brew", "tap-new", self.test_tap_name], check=False)
+
+        # 2. Get tap directory
+        result = self.run_command(["brew", "--repo", self.test_tap_name], capture_output=True)
+        tap_dir = Path(result.stdout.strip())
+        
+        # 3. Copy files to tap directory
+        # We need Formula/ and completions/ directories
+        self.print_status(f"Copying files to {tap_dir}...")
+        self.run_command(["mkdir", "-p", str(tap_dir / "Formula")])
+        self.run_command(["mkdir", "-p", str(tap_dir / "completions")])
+        
+        self.run_command(["cp", str(self.formula_path), str(tap_dir / "Formula/")])
+        
+        # Check if completions exist and copy them
+        if Path("completions").exists():
+            self.run_command(f"cp -R completions/* {tap_dir}/completions/", shell=True)
+
+        # 4. Install from tap
         command = ["brew", "install"]
         if self.verbose:
             command.append("--verbose")
-        command.append(str(self.formula_path))
+        
+        # Use --build-from-source to ensure we use the local formula and don't try to fetch bottles
+        command.append("--build-from-source")
+        command.append(f"{self.test_tap_name}/{self.formula_name}")
 
         self.run_command(command)
         self.print_success(f"Successfully installed {self.formula_name}")
@@ -190,6 +215,11 @@ class FormulaTester:
 
         try:
             self.run_command(["brew", "uninstall", "--force", self.formula_name])
+            
+            # Untap the test tap
+            self.print_status("Removing temporary tap...")
+            self.run_command(["brew", "untap", self.test_tap_name], check=False)
+            
             self.print_success("Cleanup completed")
         except Exception as e:
             self.print_warning(f"Error during cleanup: {e}")

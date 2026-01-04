@@ -7,21 +7,21 @@ class Kpf < Formula
   sha256 "061a5dcfa3a7f7f268044b949022c5c89104458e6b0c9d41e29eb4ba8082dfe1"
   license "MIT"
 
-  depends_on "python@3.12"
+  depends_on "python@3.14"
 
   def install
-    virtualenv_create(libexec, "python3.12")
+    virtualenv_create(libexec, "python3.14")
     
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
-    system libexec/"bin/python", "-m", "pip", "install", "kpf==0.4.0"
+    system libexec/"bin/python", "-m", "pip", "install", "--ignore-requires-python", "kpf==0.4.0"
     
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
 
     # Install shell completions
-    bash_completion.install "completions/kpf.bash" => "kpf"
-    zsh_completion.install "completions/_kpf" => "_kpf"
+    # bash_completion.install tap.path/"completions/kpf.bash" => "kpf"
+    # zsh_completion.install tap.path/"completions/_kpf" => "_kpf"
   end
 
   test do
