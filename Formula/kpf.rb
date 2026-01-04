@@ -3,29 +3,25 @@ class Kpf < Formula
 
   desc "Kubernetes utility to improve kubectl port-forward reliability and usability"
   homepage "https://github.com/jessegoodier/kpf"
-  url "https://files.pythonhosted.org/packages/71/67/4ed1b3fa276863f06bfcee88766ff5079d2d8390e4851201f0f354fcfe07/kpf-0.5.0.tar.gz"
-  sha256 "b77492cc9c5080e94435f4be535d7b555b5d05cf3e036b4443001eb0a1167ef5"
+  url "https://files.pythonhosted.org/packages/d5/23/cc9155017e1ec2243cde579b25767a384a2a93c7a3770f1542f87101ee0b/kpf-0.5.1.tar.gz"
+  sha256 "93dd8597e3de62f440577ba786eece566dac71aa43d59c78daed40527a2605ad"
   license "MIT"
 
   depends_on "python@3.14"
 
   def install
     virtualenv_create(libexec, "python3.14")
-
+    
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
-    system libexec/"bin/python", "-m", "pip", "install", "kpf==0.5.0"
-
+    system libexec/"bin/python", "-m", "pip", "install", "--ignore-requires-python", "kpf==0.5.1"
+    
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
 
-    # Install shell completions from the source distribution
-    # The completions are included in the PyPI tarball
-    if (buildpath/"completions").exist?
-      bash_completion.install "completions/kpf.bash" => "kpf"
-      zsh_completion.install "completions/_kpf" => "_kpf"
-    end
-
+    # Install shell completions
+    # bash_completion.install tap.path/"completions/kpf.bash" => "kpf"
+    # zsh_completion.install tap.path/"completions/_kpf" => "_kpf"
   end
 
   test do
@@ -34,6 +30,6 @@ class Kpf < Formula
     
     # Test version output
     version_output = shell_output("#{bin}/kpf --version")
-    assert_match "kpf 0.5.0", version_output
+    assert_match "kpf 0.5.1", version_output
   end
 end
