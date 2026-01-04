@@ -162,30 +162,53 @@ class FormulaTester:
         # 2. Get tap directory
         result = self.run_command(["brew", "--repo", self.test_tap_name], capture_output=True)
         tap_dir = Path(result.stdout.strip())
-        
-        # 3. Copy files to tap directory
-        # We need Formula/ and completions/ directories
-        self.print_status(f"Copying files to {tap_dir}...")
+
+        # 3. Copy formula to tap directory
+        # Note: We intentionally do NOT copy completions to the tap directory
+        # The formula should get completions from the PyPI tarball (buildpath)
+        self.print_status(f"Copying formula to {tap_dir}...")
         self.run_command(["mkdir", "-p", str(tap_dir / "Formula")])
-        self.run_command(["mkdir", "-p", str(tap_dir / "completions")])
-        
         self.run_command(["cp", str(self.formula_path), str(tap_dir / "Formula/")])
-        
-        # Check if completions exist and copy them
-        if Path("completions").exists():
-            self.run_command(f"cp -R completions/* {tap_dir}/completions/", shell=True)
 
         # 4. Install from tap
         command = ["brew", "install"]
         if self.verbose:
             command.append("--verbose")
-        
+
         # Use --build-from-source to ensure we use the local formula and don't try to fetch bottles
         command.append("--build-from-source")
         command.append(f"{self.test_tap_name}/{self.formula_name}")
 
         self.run_command(command)
         self.print_success(f"Successfully installed {self.formula_name}")
+
+    def verify_completions(self) -> None:
+        """Verify that shell completions were installed correctly."""
+        self.print_status(f"{Colors.BLUE}Verifying shell completions...")
+
+        # Get Homebrew prefix
+        result = self.run_command(["brew", "--prefix"], capture_output=True)
+        brew_prefix = Path(result.stdout.strip())
+
+        # Check for bash completion
+        bash_completion = brew_prefix / "etc" / "bash_completion.d" / self.formula_name
+        if bash_completion.exists():
+            self.print_success(f"Bash completion installed: {bash_completion}")
+        else:
+            self.print_warning(f"Bash completion not found at: {bash_completion}")
+
+        # Check for zsh completion
+        zsh_completion = brew_prefix / "share" / "zsh" / "site-functions" / f"_{self.formula_name}"
+        if zsh_completion.exists():
+            self.print_success(f"Zsh completion installed: {zsh_completion}")
+        else:
+            self.print_warning(f"Zsh completion not found at: {zsh_completion}")
+
+        if not bash_completion.exists() and not zsh_completion.exists():
+            self.print_warning(
+                "No shell completions found. "
+                "This may be expected if completions are not in the PyPI tarball."
+            )
 
     def test_formula(self) -> None:
         """Run the formula's test suite."""
@@ -263,6 +286,10 @@ class FormulaTester:
 
         # Install formula
         self.install_formula()
+        print()
+
+        # Verify completions
+        self.verify_completions()
         print()
 
         # Show formula info

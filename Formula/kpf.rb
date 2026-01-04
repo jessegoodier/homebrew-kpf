@@ -11,17 +11,20 @@ class Kpf < Formula
 
   def install
     virtualenv_create(libexec, "python3.14")
-    
+
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
     system libexec/"bin/python", "-m", "pip", "install", "kpf==0.5.0"
-    
+
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
 
-    # Install shell completions
-    bash_completion.install tap.path/"completions/kpf.bash" => "kpf"
-    zsh_completion.install tap.path/"completions/_kpf" => "_kpf"
+    # Install shell completions from the source distribution
+    # The completions are included in the PyPI tarball
+    if (buildpath/"completions").exist?
+      bash_completion.install "completions/kpf.bash" => "kpf"
+      zsh_completion.install "completions/_kpf" => "_kpf"
+    end
 
   end
 
