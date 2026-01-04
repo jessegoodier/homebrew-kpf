@@ -70,14 +70,15 @@ kpf --version
 ### Formula Validation
 
 ```bash
-# Validate the formula syntax
-brew formula-check Formula/kpf.rb
+# Run the comprehensive local test script
+# This creates a temporary local tap, installs the formula, and runs tests
+python3 scripts/test-formula.py kpf
 
-# Audit the formula
-brew audit --strict Formula/kpf.rb
-
-# Test the formula
-brew test Formula/kpf.rb
+# Options:
+#   -f, --force          Force reinstall even if formula is already installed
+#   -s, --skip-uninstall Skip uninstalling the formula after testing
+#   -v, --verbose        Enable verbose output
+python3 scripts/test-formula.py -f -v kpf
 ```
 
 ## Maintenance
