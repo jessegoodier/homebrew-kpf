@@ -99,11 +99,11 @@ class FormulaUpdater:
 
   def install
     virtualenv_create(libexec, "python3.14")
-    
+
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
     system libexec/"bin/python", "-m", "pip", "install", "--ignore-requires-python", "kpf=={version}"
-    
+
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
 
@@ -115,7 +115,7 @@ class FormulaUpdater:
   test do
     # Test that the kpf command exists and shows help
     assert_match "A better Kubectl Port-Forward", shell_output("#{{bin}}/kpf --help")
-    
+
     # Test version output
     version_output = shell_output("#{{bin}}/kpf --version")
     assert_match "kpf {version}", version_output
@@ -173,13 +173,13 @@ def main():
 Examples:
   # Fetch latest version from PyPI
   %(prog)s --fetch-version-from-pypi
-  
+
   # Use specific version
   %(prog)s --version 0.1.10
-  
+
   # Generate formula file
   %(prog)s --version 0.1.10 --output-formula Formula/kpf.rb
-  
+
   # Output for GitHub Actions
   %(prog)s --fetch-version-from-pypi --output-format env
         """,

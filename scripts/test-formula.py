@@ -59,7 +59,11 @@ class FormulaTester:
         print(f"{Colors.GREEN}[SUCCESS]{Colors.NC} {message}")
 
     def run_command(
-        self, command: list, capture_output: bool = False, check: bool = True, shell: bool = False
+        self,
+        command: list,
+        capture_output: bool = False,
+        check: bool = True,
+        shell: bool = False,
     ) -> subprocess.CompletedProcess:
         """Run a shell command with proper error handling."""
         if self.dry_run:
@@ -69,7 +73,9 @@ class FormulaTester:
 
         try:
             if capture_output:
-                result = subprocess.run(command, capture_output=True, text=True, check=check, shell=shell)
+                result = subprocess.run(
+                    command, capture_output=True, text=True, check=check, shell=shell
+                )
             else:
                 result = subprocess.run(command, check=check, shell=shell)
             return result
@@ -97,12 +103,19 @@ class FormulaTester:
 
         self.print_status(f"Formula file found: {self.formula_path}")
 
+    @property
+    def fully_qualified_name(self) -> str:
+        """Get the fully qualified name of the formula in the test tap."""
+        return f"{self.test_tap_name}/{self.formula_name}"
+
     def check_installation_status(self) -> bool:
         """Check if the formula is currently installed."""
         try:
+            # Check for generic installation first
             result = self.run_command(
                 ["brew", "list", self.formula_name], capture_output=True, check=False
             )
+
             if result.returncode == 0:
                 # Get version information
                 version_result = self.run_command(
@@ -110,7 +123,9 @@ class FormulaTester:
                     capture_output=True,
                 )
                 version_line = version_result.stdout.strip()
-                current_version = version_line.split()[-1] if version_line else "unknown"
+                current_version = (
+                    version_line.split()[-1] if version_line else "unknown"
+                )
 
                 self.print_warning(
                     f"Formula {self.formula_name} is already installed (version: {current_version})"
@@ -138,46 +153,74 @@ class FormulaTester:
     def uninstall_formula(self) -> None:
         """Uninstall the formula if it's currently installed."""
         try:
+            # Check if installed normally or via specific tap
             result = self.run_command(
                 ["brew", "list", self.formula_name], capture_output=True, check=False
             )
-            if result.returncode == 0:
-                self.print_status(f"{Colors.YELLOW}Uninstalling existing {self.formula_name}...")
 
-                self.run_command(["brew", "uninstall", "--force", self.formula_name])
+            if result.returncode == 0:
+                self.print_status(
+                    f"{Colors.YELLOW}Uninstalling existing {self.formula_name}..."
+                )
+
+                # Try to uninstall just by name first
+                self.run_command(
+                    ["brew", "uninstall", "--force", self.formula_name], check=False
+                )
+
+                # Also try fully qualified name if still installed (e.g. if multiple taps have it)
+                if self.check_installation_status():
+                    self.run_command(
+                        ["brew", "uninstall", "--force", self.fully_qualified_name],
+                        check=False,
+                    )
+
                 self.print_success(f"Successfully uninstalled {self.formula_name}")
             else:
                 self.print_status(f"{Colors.BLUE}No existing installation to remove")
         except Exception as e:
             self.print_warning(f"Error during uninstallation: {e}")
 
-    def install_formula(self) -> None:
-        """Install the formula from the local formula file using a temporary tap."""
-        self.print_status(f"{Colors.BLUE}Installing {self.formula_name} from local tap...")
+    def setup_test_tap(self) -> None:
+        """Create a temporary tap and copy the formula to it."""
+        self.print_status("Setting up temporary tap...")
 
         # 1. Create temporary tap
-        self.print_status("Creating temporary tap...")
-        self.run_command(["brew", "tap-new", self.test_tap_name], check=False)
+        result = self.run_command(
+            ["brew", "tap-new", self.test_tap_name], check=False, capture_output=True
+        )
+        if (
+            result.returncode != 0
+            and "Tap is already installed" not in result.stderr
+            and "Tap is already installed" not in result.stdout
+        ):
+            pass
 
         # 2. Get tap directory
-        result = self.run_command(["brew", "--repo", self.test_tap_name], capture_output=True)
+        result = self.run_command(
+            ["brew", "--repo", self.test_tap_name], capture_output=True
+        )
         tap_dir = Path(result.stdout.strip())
 
         # 3. Copy formula to tap directory
-        # Note: We intentionally do NOT copy completions to the tap directory
-        # The formula should get completions from the PyPI tarball (buildpath)
         self.print_status(f"Copying formula to {tap_dir}...")
         self.run_command(["mkdir", "-p", str(tap_dir / "Formula")])
         self.run_command(["cp", str(self.formula_path), str(tap_dir / "Formula/")])
 
-        # 4. Install from tap
-        command = ["brew", "install"]
+    def install_formula(self) -> None:
+        """Install the formula from the local tap."""
+        self.print_status(
+            f"{Colors.BLUE}Installing {self.formula_name} from local tap..."
+        )
+
+        # Install from tap
+        command = ["brew", "install", "--force"]
         if self.verbose:
             command.append("--verbose")
 
         # Use --build-from-source to ensure we use the local formula and don't try to fetch bottles
         command.append("--build-from-source")
-        command.append(f"{self.test_tap_name}/{self.formula_name}")
+        command.append(self.fully_qualified_name)
 
         self.run_command(command)
         self.print_success(f"Successfully installed {self.formula_name}")
@@ -198,7 +241,9 @@ class FormulaTester:
             self.print_warning(f"Bash completion not found at: {bash_completion}")
 
         # Check for zsh completion
-        zsh_completion = brew_prefix / "share" / "zsh" / "site-functions" / f"_{self.formula_name}"
+        zsh_completion = (
+            brew_prefix / "share" / "zsh" / "site-functions" / f"_{self.formula_name}"
+        )
         if zsh_completion.exists():
             self.print_success(f"Zsh completion installed: {zsh_completion}")
         else:
@@ -217,7 +262,7 @@ class FormulaTester:
         command = ["brew", "test"]
         if self.verbose:
             command.append("--verbose")
-        command.append(self.formula_name)
+        command.append(self.fully_qualified_name)
 
         self.run_command(command)
         self.print_success(f"All tests passed for {self.formula_name}")
@@ -226,23 +271,30 @@ class FormulaTester:
         """Display information about the installed formula."""
         self.print_status(f"{Colors.BLUE}Formula information:")
 
-        self.run_command(["brew", "info", self.formula_name])
+        self.run_command(["brew", "info", self.fully_qualified_name])
 
     def cleanup(self) -> None:
         """Clean up the test installation."""
         if self.skip_uninstall:
-            self.print_status(f"{Colors.YELLOW}Skipping cleanup (--skip-uninstall specified)")
+            self.print_status(
+                f"{Colors.YELLOW}Skipping cleanup (--skip-uninstall specified)"
+            )
             return
 
         self.print_status(f"{Colors.BLUE}Cleaning up test installation...")
 
         try:
-            self.run_command(["brew", "uninstall", "--force", self.formula_name])
-            
+            self.run_command(
+                ["brew", "uninstall", "--force", self.fully_qualified_name], check=False
+            )
+            self.run_command(
+                ["brew", "uninstall", "--force", self.formula_name], check=False
+            )
+
             # Untap the test tap
             self.print_status("Removing temporary tap...")
             self.run_command(["brew", "untap", self.test_tap_name], check=False)
-            
+
             self.print_success("Cleanup completed")
         except Exception as e:
             self.print_warning(f"Error during cleanup: {e}")
@@ -252,19 +304,24 @@ class FormulaTester:
         self.print_status(f"{Colors.BLUE}Running formula audit...")
 
         try:
+            # Audit the formula in the tap
             result = self.run_command(
-                ["brew", "audit", "--strict", str(self.formula_path)], check=False
+                ["brew", "audit", "--strict", self.fully_qualified_name], check=False
             )
             if result.returncode == 0:
                 self.print_success("Formula audit passed")
             else:
-                self.print_warning("Formula audit had issues (this may not prevent installation)")
+                self.print_warning(
+                    "Formula audit had issues (this may not prevent installation)"
+                )
         except Exception as e:
             self.print_warning(f"Error during audit: {e}")
 
     def run_tests(self) -> None:
         """Main method to run the complete testing workflow."""
-        self.print_status(f"{Colors.BLUE}Starting formula test for: {self.formula_name}")
+        self.print_status(
+            f"{Colors.BLUE}Starting formula test for: {self.formula_name}"
+        )
         print()
 
         # Check prerequisites
@@ -278,6 +335,10 @@ class FormulaTester:
         if self.force_reinstall or self.was_installed:
             self.uninstall_formula()
 
+        print()
+
+        # Setup tap first so we can audit
+        self.setup_test_tap()
         print()
 
         # Run audit
@@ -354,7 +415,9 @@ def main() -> None:
         help="Skip uninstalling the formula after testing",
     )
 
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose output"
+    )
 
     parser.add_argument(
         "-d",
@@ -363,7 +426,9 @@ def main() -> None:
         help="Show what would be done without executing",
     )
 
-    parser.add_argument("-h", "--help", action="store_true", help="Show this help message")
+    parser.add_argument(
+        "-h", "--help", action="store_true", help="Show this help message"
+    )
 
     parser.add_argument("formula_name", nargs="?", help="Name of the formula to test")
 
@@ -390,7 +455,9 @@ def main() -> None:
         print(f"\n{Colors.RED}[ERROR]{Colors.NC} Script interrupted", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"\n{Colors.RED}[ERROR]{Colors.NC} Unexpected error: {e}", file=sys.stderr)
+        print(
+            f"\n{Colors.RED}[ERROR]{Colors.NC} Unexpected error: {e}", file=sys.stderr
+        )
         sys.exit(1)
 
 
