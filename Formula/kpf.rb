@@ -3,8 +3,8 @@ class Kpf < Formula
 
   desc "Kubernetes utility to improve kubectl port-forward reliability and usability"
   homepage "https://github.com/jessegoodier/kpf"
-  url "https://files.pythonhosted.org/packages/3e/7c/a09a984d228a8f15b7c140acc61890f8b02a71ae2828a6a9ff156dca65f6/kpf-0.7.0.tar.gz"
-  sha256 "6a955ab624fc920d5f69fd57199a8f00b0d3f23e5519d640e6f4f3d5d2b50310"
+  url "https://files.pythonhosted.org/packages/4a/66/8defcf54c481f3f9226eb2ed7c24ce23f07fb6df67a8040d23661e051874/kpf-0.8.0.tar.gz"
+  sha256 "77c630dd641b2a6a1f7d72d97d5e3f0d5500c807611fa4fe55d537b77774e3c2"
   license "MIT"
 
   depends_on "python@3.14"
@@ -14,14 +14,14 @@ class Kpf < Formula
     
     # Install kpf and its dependencies directly from PyPI using wheels
     # This bypasses all the build system compatibility issues
-    system libexec/"bin/python", "-m", "pip", "install", "--ignore-requires-python", "kpf==0.7.0"
+    system libexec/"bin/python", "-m", "pip", "install", "--ignore-requires-python", "kpf==0.8.0"
     
     # Create binary symlink
     bin.install_symlink libexec/"bin/kpf"
 
     # Install shell completions
-    bash_completion.install "src/kpf/completions/kpf.bash" => "kpf"
-    zsh_completion.install "src/kpf/completions/_kpf" => "_kpf"
+    bash_completion.install "completions/kpf.bash" => "kpf"
+    zsh_completion.install "completions/_kpf" => "_kpf"
   end
 
   test do
@@ -30,6 +30,6 @@ class Kpf < Formula
     
     # Test version output
     version_output = shell_output("#{bin}/kpf --version")
-    assert_match "kpf 0.7.0", version_output
+    assert_match "kpf 0.8.0", version_output
   end
 end
