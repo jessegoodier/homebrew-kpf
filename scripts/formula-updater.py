@@ -108,8 +108,8 @@ class FormulaUpdater:
     bin.install_symlink libexec/"bin/kpf"
 
     # Install shell completions
-    bash_completion.install "completions/kpf.bash" => "kpf"
-    zsh_completion.install "completions/_kpf" => "_kpf"
+    bash_completion.install "src/kpf/completions/kpf.bash" => "kpf"
+    zsh_completion.install "src/kpf/completions/_kpf" => "_kpf"
   end
 
   test do
