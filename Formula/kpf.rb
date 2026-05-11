@@ -9,6 +9,13 @@ class Kpf < Formula
 
   depends_on "python@3.14"
 
+  def caveats
+    <<~EOS
+      kpfh is installed alongside kpf.
+      Use kpfh to quickly reconnect to previously used port-forwards.
+    EOS
+  end
+
   def install
     virtualenv_create(libexec, "python3.14")
 
@@ -16,8 +23,9 @@ class Kpf < Formula
     # This bypasses all the build system compatibility issues
     system libexec/"bin/python", "-m", "pip", "install", "--ignore-requires-python", "kpf==0.12.4"
 
-    # Create binary symlink
+    # Create binary symlinks
     bin.install_symlink libexec/"bin/kpf"
+    bin.install_symlink libexec/"bin/kpfh"
 
     # Install shell completions
     bash_completion.install "src/kpf/completions/kpf.bash" => "kpf"
@@ -27,6 +35,9 @@ class Kpf < Formula
   test do
     # Test that the kpf command exists and shows help
     assert_match "A better Kubectl Port-Forward", shell_output("#{bin}/kpf --help")
+
+    # Test that the kpfh command exists and shows help
+    assert_match "Usage:", shell_output("#{bin}/kpfh --help")
 
     # Test version output
     version_output = shell_output("#{bin}/kpf --version")
