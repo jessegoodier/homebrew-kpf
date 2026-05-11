@@ -102,28 +102,26 @@ jobs:
       - name: Check if update needed
         id: check-update
         run: |
-          # Extract current version from formula
-          if [[ -f Formula/kpf.rb ]]; then
-            CURRENT_VERSION=$(grep -o 'kpf-[0-9]*\.[0-9]*\.[0-9]*' Formula/kpf.rb | sed 's/kpf-//' || echo "")
-            if [[ -z "$CURRENT_VERSION" ]]; then
-              # Try alternative pattern for direct PyPI installation
-              CURRENT_VERSION=$(grep -o 'kpf==[0-9]*\.[0-9]*\.[0-9]*' Formula/kpf.rb | sed 's/kpf==//' || echo "0.0.0")
-            fi
-          else
-            CURRENT_VERSION="0.0.0"
-          fi
-          
+          CURRENT_VERSION=$(python3 scripts/formula-updater.py --current-version Formula/kpf.rb)
           NEW_VERSION="${{ steps.version-info.outputs.version }}"
           
           echo "Current version: $CURRENT_VERSION"
           echo "New version: $NEW_VERSION"
-          
+
+          set +e
+          python3 scripts/formula-updater.py --validate-formula Formula/kpf.rb --version "$CURRENT_VERSION"
+          FORMULA_VALID=$?
+          set -e
+
           if [[ "$CURRENT_VERSION" != "$NEW_VERSION" ]]; then
             echo "update-needed=true" >> $GITHUB_OUTPUT
             echo "Update needed from $CURRENT_VERSION to $NEW_VERSION"
+          elif [[ "$FORMULA_VALID" -ne 0 ]]; then
+            echo "update-needed=true" >> $GITHUB_OUTPUT
+            echo "Formula is at $NEW_VERSION but is missing required tap behavior; regenerating"
           else
             echo "update-needed=false" >> $GITHUB_OUTPUT
-            echo "No update needed, already at version $NEW_VERSION"
+            echo "No update needed, already at version $NEW_VERSION with required tap behavior"
           fi
 
       - name: Generate updated formula
@@ -136,6 +134,12 @@ jobs:
           
           echo "Generated formula:"
           cat Formula/kpf.rb
+
+      - name: Validate generated formula
+        if: steps.check-update.outputs.update-needed == 'true'
+        run: |
+          VERSION="${{ steps.version-info.outputs.version }}"
+          python3 scripts/formula-updater.py --validate-formula Formula/kpf.rb --version "$VERSION"
 
       - name: Test formula syntax
         if: steps.check-update.outputs.update-needed == 'true'
@@ -171,7 +175,7 @@ jobs:
         if: steps.check-update.outputs.update-needed == 'true'
         run: |
           echo "Changes to be committed:"
-          git diff --no-index /dev/null Formula/kpf.rb || true
+          git diff -- Formula/kpf.rb scripts/formula-updater.py
           git status
 
       - name: Commit changes
@@ -188,6 +192,7 @@ jobs:
 
           - Updated to PyPI version $VERSION  
           - Updated source URL and SHA256 checksum
+          - Preserved kpfh symlink, tests, and install caveats
           - Generated via automated formula-updater.py script
           - Source: $URL
 
